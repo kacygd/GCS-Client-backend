@@ -1,0 +1,23 @@
+{
+  "name": "sa1nt.gcs.backend",
+  "version": "1.0.0",
+  "module": "index.js",
+  "type": "module",
+  "devDependencies": {
+    "@types/bun": "latest"
+  },
+  "peerDependencies": {
+    "typescript": "^5.0.0"
+  },
+  "dependencies": {
+    "7zip-bin": "^5.2.0",
+    "bsdiffjs": "^1.0.2",
+    "elysia": "^1.1.24",
+    "md5-file": "^5.0.0",
+    "node-7z": "^3.0.0",
+    "yauzl": "^3.2.0"
+  },
+  "trustedDependencies": [
+    "bsdiff-node"
+  ]
+}
