@@ -1,7 +1,6 @@
 const { resolve } = require("path");
 const util = require('util');
 const exec = util.promisify(require('child_process').execFile);
-const md5File = require('md5-file');
 const utils = require('../utils/utils.js');
 const hdiffpatch = [];
 /*
@@ -32,18 +31,11 @@ hdiffpatch.path = function() {
 */
 hdiffpatch.diff = function(originalFile, targetFile, patchFile) {
 	return new Promise(async function(r) {
-		originalFileChecksum = await md5File(originalFile);
-		targetFileChecksum = await md5File(targetFile);
-		if(originalFileChecksum == targetFileChecksum) {
-			utils.log("Skipped patch making as files are the same.");
-			r(false);
-		} else {
-			const hdiff = hdiffpatch.path()['hdiffz'];
-			const args = [originalFile, targetFile, patchFile];
-			exec(hdiff, args).then(result => {
-				r(result);
-			});
-		}
+		const hdiff = hdiffpatch.path()['hdiffz'];
+		const args = [originalFile, targetFile, patchFile];
+		exec(hdiff, args).then(result => {
+			r(result);
+		});
 	});
 }
 /*

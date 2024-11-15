@@ -3,93 +3,159 @@ import utils from './utils/utils.js';
 import hdiffpatch from './utils/hdiffpatch.js';
 const { resolve, dirname } = require("path");
 import Seven from 'node-7z';
-import sevenBin from '7zip-bin';
 const { Readable } = require("stream");
 import fs from 'fs';
+const md5File = require('md5-file');
 
 const app = new Elysia({
 	serve: {
-		maxRequestBodySize: Number.MAX_SAFE_INTEGER,
+		maxRequestBodySize: 1024 * 1024 * 300,
 	}
 })
-.get('/', (c) => {
-	utils.log(utils.getUpdates(1731523591));
+.get('/', async function({ server, request, cookie: { token } }) {
+	const IP = server.requestIP(request).address;
+	const tokenCheck = await utils.checkToken(token, IP);
+	if(!tokenCheck) return Bun.file('pages/setToken.html');
 	return Bun.file('pages/index.html');
 })
-.post('/', async function(c) {
+.post('/create', async function({ server, request, cookie: { token }, body: { file } }) {
+	const IP = server.requestIP(request).address;
+	const tokenCheck = await utils.checkToken(token, IP);
+	if(!tokenCheck) return Bun.file('pages/setToken.html');
 	const timestamp = utils.timestamp();
-	const pathTo7zip = sevenBin.path7za;
-	const lastUpdate = utils.getUpdates(1731523591)[0].timestamp;
-	await Bun.write(resolve("./files/" + timestamp + ".7z"), c.body.file);
+	const pathTo7zip = await utils.pathTo7zip();
+	await Bun.write(resolve("./files/" + timestamp + ".7z"), file);
 	try {
+		const updateID = utils.newUpdate(timestamp);
 		var extractedFiles = [];
-		const myStream = Seven.extractFull(resolve("./files/" + timestamp + ".7z"), resolve("./files/" + timestamp), {
-		  $progress: true,
-		  $bin: pathTo7zip
+		const oldExists = await utils.directoryExists(resolve("./files/last"));
+		const folderToExtract = oldExists ? timestamp : "last";
+		var hasPatches = 0;
+		utils.changeUpdateState(updateID, 0, hasPatches);
+		const extractArchive = Seven.extractFull(resolve("./files/" + timestamp + ".7z"), resolve("./files/" + folderToExtract), {
+			$progress: true,
+			$bin: pathTo7zip
 		});
-		fs.mkdir(resolve("./patches/" + timestamp), err => { if(err) utils.log(err, 2); });
-		myStream.on('data', async function (data) {
-			utils.log("File: " + data.file);
+		utils.changeUpdateState(updateID, 1, hasPatches);
+		extractArchive.on('data', async function (data) {
+			utils.log("Extracted file: " + data.file);
 			if(data.file.indexOf('.') > -1) extractedFiles.push(data.file);
+			Bun.gc(false);
 		});
-		myStream.on('end', async function () {
-			utils.log("Unzipping done!!! :3 Making patch files now. :trollface:");
+		extractArchive.on('end', async function () {
+			utils.changeUpdateState(updateID, 2, hasPatches);
+			utils.log("Unzipping done!!! :3 ");
 			await fs.unlink(resolve("./files/" + timestamp + ".7z"), err => { if(err) utils.log(err, 2); });
-			await fs.unlink(resolve("./files/" + lastUpdate + ".7z"), err => { if(err) utils.log(err, 2); });
-			var oldFilePath = resolve("./files/" + lastUpdate + "/" + extractedFiles[extractedFiles.length - 1]);
-			var oldFile = Bun.file(oldFilePath);
-			const oldFileExists = await oldFile.exists();
 			var patchedFiles = [];
-			if(oldFileExists) {
+			if(oldExists) {
+				utils.log("Making patch files now. :trollface:");
+				hasPatches = 1;
+				const oldFilesJSON = Bun.file(resolve("./files/files.json"));
+				const oldFilesJSONExists = await oldFilesJSON.exists();
+				if(oldFilesJSONExists) {
+					const oldFilesText = await oldFilesJSON.text();
+					var oldFiles = JSON.parse(oldFilesText);
+				}
+				var oldFilePath = '';
 				var newFilePath = '';
 				var patchFile = '';
 				var i = 0;
 				for(i = 0; i < extractedFiles.length; i++) {
-					oldFilePath = resolve("./files/" + lastUpdate + "/" + extractedFiles[i])
+					oldFilePath = resolve("./files/last/" + extractedFiles[i]);
 					newFilePath = resolve("./files/" + timestamp + "/" + extractedFiles[i]);
-					patchFile = resolve("./patches/" + timestamp + "/" + extractedFiles[i] + ".patch");
-					fs.mkdir(dirname(patchFile), { recursive: true }, err => { if(err) utils.log(err, 2); });
-					utils.log("Making patch file for: " + extractedFiles[i]);
-					var diffValue = await hdiffpatch.diff(oldFilePath, newFilePath, patchFile);
-					if(diffValue) patchedFiles.push(extractedFiles[i]);
+					patchFile = resolve("./patches/" + timestamp + "/" + extractedFiles[i] + ".p");
+					var oldFile = Bun.file(oldFilePath);
+					var oldFileExists = await oldFile.exists();
+					if(!oldFileExists) {
+						utils.log("Moving file: " + extractedFiles[i] + " as it is new file");
+						await fs.rename(newFilePath, oldFilePath, err => { if(err) utils.log(err, 2); }); 
+						await fs.mkdir(dirname(patchFile), { recursive: true }, err => { if(err) utils.log(err, 2); });
+						await Bun.write(resolve("./patches/" + timestamp + "/" + extractedFiles[i] + ".m"), ":3");
+					} else {
+						var originalFileChecksum = await md5File.sync(oldFilePath);
+						var targetFileChecksum = await md5File.sync(newFilePath);
+						if(originalFileChecksum == targetFileChecksum) {
+							utils.log("Skipped making patch for: " + extractedFiles[i] + " as these files are same");
+							Bun.gc(true);
+						} else {
+							fs.mkdir(dirname(patchFile), { recursive: true }, err => { if(err) utils.log(err, 2); });
+							utils.log("Making patch file for: " + extractedFiles[i]);
+							await hdiffpatch.diff(oldFilePath, newFilePath, patchFile);
+							patchedFiles.push(extractedFiles[i]);
+							Bun.gc(true);
+						}
+					}
 				}
+				if(oldFilesJSONExists) {
+					const deletedFiles = utils.deletedFiles(oldFiles, extractedFiles);
+					if(deletedFiles.length > 0) {
+						i = 0;
+						var filePath = '';
+						for(i = 0; i < deletedFiles.length; i++) {
+							filePath = resolve("./files/last/" + deletedFiles[i]);
+							utils.log("Deleting file: " + deletedFiles[i] + " as it is not presented in new archive");
+							await fs.unlink(filePath, err => { if(err) utils.log(err, 2); });
+							await fs.mkdir(dirname(patchFile), { recursive: true }, err => { if(err) utils.log(err, 2); });
+							await Bun.write(resolve("./patches/" + timestamp + "/" + deletedFiles[i] + ".d"), ":3");
+						}
+					}
+				}
+				if(patchedFiles.length > 0) {
+					i = 0;
+					var filePath = '';
+					for(i = 0; i < patchedFiles.length; i++) {
+						filePath = resolve("./files/last/" + patchedFiles[i])
+						patchFile = resolve("./patches/" + timestamp + "/" + patchedFiles[i] + ".p");
+						fs.mkdir(dirname(patchFile), { recursive: true }, err => { if(err) utils.log(err, 2); });
+						utils.log("Patching file: " + patchedFiles[i]);
+						await hdiffpatch.patch(filePath, patchFile, filePath + "_new");
+						await fs.unlink(filePath, err => { if(err) utils.log(err, 2); }); 
+						await fs.rename(filePath + "_new", filePath, err => { if(err) utils.log(err, 2); }); 
+						Bun.gc(true);
+					}
+				}
+				await utils.createLatestVersionArchive(timestamp);
+				utils.changeUpdateState(updateID, 3, hasPatches);
+			} else {
+				await utils.createLatestVersionArchive();
+				utils.changeUpdateState(updateID, 3, hasPatches);
 			}
-			console.log(patchedFiles);
-			if(patchedFiles.length > 0) {
-				i = 0;
-				var filePath = '';
-				for(i = 0; i < patchedFiles.length; i++) {
-					filePath = resolve("./files/" + lastUpdate + "/" + patchedFiles[i])
-					patchFile = resolve("./patches/" + timestamp + "/" + patchedFiles[i] + ".patch");
-					fs.mkdir(dirname(patchFile), { recursive: true }, err => { if(err) utils.log(err, 2); });
-					utils.log("Patching file: " + patchedFiles[i]);
-					await hdiffpatch.patch(filePath, patchFile, filePath + "_new");
-					await fs.unlink(filePath, err => { if(err) utils.log(err, 2); });
-					await fs.rename(filePath + "_new", filePath, err => { if(err) utils.log(err, 2); });
-				}
-			} 
+			await Bun.write(resolve("./files/files.json"), JSON.stringify(extractedFiles));
 			utils.log("Everything is done!!!!! yaaay");
-			utils.newUpdate(timestamp);
-			removeRemnants(timestamp, lastUpdate);
-			utils.log("check");
+			Bun.gc(true);
+			try {
+				const tempFolderExists = await utils.directoryExists(resolve("./files/" + timestamp));
+				if(tempFolderExists) await fs.rmSync(resolve("./files/" + timestamp), { recursive: true, force: true });
+			} catch(e) {
+				utils.log(e, 2);
+			}
 		});
 	} catch(e) {
 		utils.log(e, 2);
 		return 'Error while unzipping';
 	}
-	return 'File uploaded AZAZA';
+	return 'File uploaded, other stuff will happen on backend';
 }, {
   body: t.Object({
     file: t.File()
   })
 })
+.get("/download/:lastUpdate", async function({ params: { lastUpdate } }) {
+	if(lastUpdate == 0) {
+		return Bun.file(resolve("./files/latest.7z"));
+	} else {
+		return Bun.file(resolve("./patches/" + lastUpdate + "/patches.7z"));
+	}
+})
+.get("/updates/:lastUpdate", async function({ params: { lastUpdate } }) {
+	const updates = await utils.getPatchUpdates(lastUpdate);
+	var i = 0;
+	var updatesTimeArray = [];
+	for(i = 0; i < updates.length; i++) {
+		updatesTimeArray.push(updates[i].timestamp);
+	}
+	return updatesTimeArray;
+})
 .listen(process.env.PORT);
 
-console.log(`🦊 Elysia is running at on port ${app.server?.port}...`)
-
-async function removeRemnants(timestamp, lastUpdate) {
-	await Bun.sleep(2000);
-	await fs.unlink(resolve("./files/" + timestamp), err => { if(err) utils.log(err, 2); });
-	await Bun.sleep(2000);
-	await fs.rename(resolve("./files/" + lastUpdate), resolve("./files/" + timestamp), err => { if(err) utils.log(err, 2); });
-}
+utils.log(`Running on port ${app.server?.port}. Happy GDPS'ing!`)
