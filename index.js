@@ -144,6 +144,7 @@ const app = new Elysia({
 	if(lastUpdate == 0) {
 		return Bun.file(resolve("./files/latest.7z"));
 	} else {
+		if(isNaN(lastUpdate)) return Bun.file(resolve("./files/last/" + lastUpdate));
 		return Bun.file(resolve("./patches/" + lastUpdate + "/patches.7z"));
 	}
 })
