@@ -1,7 +1,6 @@
 const { resolve } = require("path");
 const util = require('util');
 const exec = util.promisify(require('child_process').execFile);
-const utils = require('../utils/utils.js');
 const hdiffpatch = [];
 /*
 	hdiffpatch.path()
@@ -58,4 +57,4 @@ hdiffpatch.patch = function(originalFile, patchFile, newFile) {
 	});
 }
 
-module.exports = hdiffpatch;
+export { hdiffpatch };

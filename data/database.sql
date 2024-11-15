@@ -1,0 +1,17 @@
+CREATE TABLE IF NOT EXISTS 'updates' (
+	'updateID' INTEGER NOT NULL,
+	'state' INTEGER NOT NULL DEFAULT 0,
+	'hasPatches' INTEGER NOT NULL DEFAULT 0,
+	'timestamp' int(11) NOT NULL DEFAULT 0,
+    PRIMARY KEY ('updateID' AUTOINCREMENT)
+);
+
+CREATE TABLE IF NOT EXISTS 'logs' (
+	'logID' INTEGER NOT NULL ,
+	'type' INTEGER NOT NULL DEFAULT 0,
+	'value1' varchar(255) NOT NULL DEFAULT '',
+	'value2' varchar(255) NOT NULL DEFAULT '',
+	'IP' varchar(255) NOT NULL DEFAULT '',
+	'timestamp' int(11) NOT NULL DEFAULT 0,
+    PRIMARY KEY ('logID' AUTOINCREMENT)
+);

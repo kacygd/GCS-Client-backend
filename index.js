@@ -1,49 +1,46 @@
 import { Elysia, t } from 'elysia';
-import utils from './utils/utils.js';
-import hdiffpatch from './utils/hdiffpatch.js';
+import { utils } from './utils/utils.js';
+import { hdiffpatch } from './utils/hdiffpatch.js';
 const { resolve, dirname } = require("path");
 import Seven from 'node-7z';
-const { Readable } = require("stream");
 import fs from 'fs';
-const md5File = require('md5-file');
+import * as md5File from 'md5-file';
 
-const app = new Elysia({
-	serve: {
-		maxRequestBodySize: 1024 * 1024 * 300,
-	}
-})
-.get('/', async function({ server, request, cookie: { token } }) {
+const app = new Elysia({ serve: { maxRequestBodySize: 1024 * 1024 * 300 } });
+
+app.get('/', async function({ server, request, cookie: { token } }) {
 	const IP = server.requestIP(request).address;
 	const tokenCheck = await utils.checkToken(token, IP);
 	if(!tokenCheck) return Bun.file('pages/setToken.html');
 	return Bun.file('pages/index.html');
-})
-.post('/create', async function({ server, request, cookie: { token }, body: { file } }) {
+});
+
+app.post('/create', async function({ server, request, cookie: { token }, body: { file } }) {
 	const IP = server.requestIP(request).address;
 	const tokenCheck = await utils.checkToken(token, IP);
 	if(!tokenCheck) return Bun.file('pages/setToken.html');
-	const timestamp = utils.timestamp();
+	const timestamp = await utils.timestamp();
 	const pathTo7zip = await utils.pathTo7zip();
 	await Bun.write(resolve("./files/" + timestamp + ".7z"), file);
 	try {
-		const updateID = utils.newUpdate(timestamp);
+		const updateID = await utils.newUpdate(timestamp);
 		var extractedFiles = [];
 		const oldExists = await utils.directoryExists(resolve("./files/last"));
 		const folderToExtract = oldExists ? timestamp : "last";
 		var hasPatches = 0;
-		utils.changeUpdateState(updateID, 0, hasPatches);
+		await utils.changeUpdateState(updateID, 0, hasPatches);
 		const extractArchive = Seven.extractFull(resolve("./files/" + timestamp + ".7z"), resolve("./files/" + folderToExtract), {
 			$progress: true,
 			$bin: pathTo7zip
 		});
-		utils.changeUpdateState(updateID, 1, hasPatches);
+		await utils.changeUpdateState(updateID, 1, hasPatches);
 		extractArchive.on('data', async function (data) {
 			utils.log("Extracted file: " + data.file);
 			if(data.file.indexOf('.') > -1) extractedFiles.push(data.file);
 			Bun.gc(false);
 		});
 		extractArchive.on('end', async function () {
-			utils.changeUpdateState(updateID, 2, hasPatches);
+			await utils.changeUpdateState(updateID, 2, hasPatches);
 			utils.log("Unzipping done!!! :3 ");
 			await fs.unlink(resolve("./files/" + timestamp + ".7z"), err => { if(err) utils.log(err, 2); });
 			var patchedFiles = [];
@@ -87,7 +84,7 @@ const app = new Elysia({
 					}
 				}
 				if(oldFilesJSONExists) {
-					const deletedFiles = utils.deletedFiles(oldFiles, extractedFiles);
+					const deletedFiles = await utils.deletedFiles(oldFiles, extractedFiles);
 					if(deletedFiles.length > 0) {
 						i = 0;
 						var filePath = '';
@@ -115,10 +112,10 @@ const app = new Elysia({
 					}
 				}
 				await utils.createLatestVersionArchive(timestamp);
-				utils.changeUpdateState(updateID, 3, hasPatches);
+				await utils.changeUpdateState(updateID, 3, hasPatches);
 			} else {
 				await utils.createLatestVersionArchive();
-				utils.changeUpdateState(updateID, 3, hasPatches);
+				await utils.changeUpdateState(updateID, 3, hasPatches);
 			}
 			await Bun.write(resolve("./files/files.json"), JSON.stringify(extractedFiles));
 			utils.log("Everything is done!!!!! yaaay");
@@ -139,16 +136,18 @@ const app = new Elysia({
   body: t.Object({
     file: t.File()
   })
-})
-.get("/download/:lastUpdate", async function({ params: { lastUpdate } }) {
+});
+
+app.get("/download/:lastUpdate", async function({ params: { lastUpdate } }) {
 	if(lastUpdate == 0) {
 		return Bun.file(resolve("./files/latest.7z"));
 	} else {
 		if(isNaN(lastUpdate)) return Bun.file(resolve("./files/last/" + lastUpdate));
 		return Bun.file(resolve("./patches/" + lastUpdate + "/patches.7z"));
 	}
-})
-.get("/updates/:lastUpdate", async function({ params: { lastUpdate } }) {
+});
+
+app.get("/updates/:lastUpdate", async function({ params: { lastUpdate } }) {
 	const updates = await utils.getPatchUpdates(lastUpdate);
 	var i = 0;
 	var updatesTimeArray = [];
@@ -156,7 +155,6 @@ const app = new Elysia({
 		updatesTimeArray.push(updates[i].timestamp);
 	}
 	return updatesTimeArray;
-})
-.listen(process.env.PORT);
+});
 
-utils.log(`Running on port ${app.server?.port}. Happy GDPS'ing!`)
+app.listen(process.env.PORT, async () => { utils.log(`Running on port ${app.server?.port}. Happy GDPS'ing!`) });
