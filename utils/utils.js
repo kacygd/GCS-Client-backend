@@ -150,6 +150,12 @@ const utils = {
 		var updates = query.all();
 		query.finalize();
 		return updates;
+	},
+	getLastUpdateTimestamp: async () => {
+		const query = db.prepare("SELECT timestamp FROM updates WHERE state = 3 ORDER BY timestamp DESC LIMIT 1");
+		var lastUpdateTimestamp = query.get();
+		query.finalize();
+		return lastUpdateTimestamp;
 	}
 };
 

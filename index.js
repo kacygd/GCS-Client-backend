@@ -5,8 +5,10 @@ const { resolve, dirname } = require("path");
 import Seven from 'node-7z';
 import fs from 'fs';
 import * as md5File from 'md5-file';
+import { cors } from '@elysiajs/cors';
 
 const app = new Elysia({ serve: { maxRequestBodySize: 1024 * 1024 * 300 } });
+app.use(cors());
 
 app.get('/', async function({ server, request, cookie: { token } }) {
 	const IP = server.requestIP(request).address;
@@ -155,6 +157,11 @@ app.get("/updates/:lastUpdate", async function({ params: { lastUpdate } }) {
 		updatesTimeArray.push(updates[i].timestamp);
 	}
 	return updatesTimeArray;
+});
+
+app.get("/lastUpdate", async function() {
+	const lastUpdateTimestamp = await utils.getLastUpdateTimestamp();
+	return lastUpdateTimestamp;
 });
 
 app.listen(process.env.PORT, async () => { utils.log(`Running on port ${app.server?.port}. Happy GDPS'ing!`) });
