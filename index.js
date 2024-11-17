@@ -144,7 +144,10 @@ app.get("/download/:lastUpdate", async function({ params: { lastUpdate } }) {
 	if(lastUpdate == 0) {
 		return Bun.file(resolve("./files/latest.7z"));
 	} else {
-		if(isNaN(lastUpdate)) return Bun.file(resolve("./files/last/" + lastUpdate));
+		if(isNaN(lastUpdate)) {
+			const lastUpdateDecoded = decodeURIComponent(atob(lastUpdate));
+			return Bun.file(resolve("./files/last/" + lastUpdateDecoded));
+		}
 		return Bun.file(resolve("./patches/" + lastUpdate + "/patches.7z"));
 	}
 });
