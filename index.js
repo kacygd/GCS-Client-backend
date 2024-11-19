@@ -38,6 +38,7 @@ app.post('/create', async function({ server, request, cookie: { token }, body: {
 		await utils.changeUpdateState(updateID, 1, hasPatches);
 		extractArchive.on('data', async function (data) {
 			utils.log("Extracted file: " + data.file);
+			await Bun.sleep(2);
 			if(data.file.indexOf('.') > -1) extractedFiles.push(data.file);
 			Bun.gc(false);
 		});
@@ -167,4 +168,40 @@ app.get("/lastUpdate", async function() {
 	return lastUpdateTimestamp;
 });
 
+app.post("/files", async function({ server, request, body }) {
+	return await new Promise(async function(r) {
+		const files = body.files;
+		if(files.length == 0) r({'error': 0});
+		const IP = server.requestIP(request).address;
+		const filesCheck = utils.checkFilesCreating(IP);
+		if(filesCheck) r({'error': 1});
+		const timestamp = await utils.timestamp();
+		const pathTo7zip = await utils.pathTo7zip();
+		const filesPath = [];
+		var i = 0;
+		for(i = 0; i < files.length; i++) filesPath.push(await resolve("./files/last/" + files[i]));
+		const logID = await utils.logAction(2, 0, files.length, IP);
+		const downloadFilesStream = Seven.add(await resolve("./files/" + timestamp + "_temp.7z"), filesPath, {
+			$bin: pathTo7zip
+		});
+		downloadFilesStream.on('data', async function(data) {
+			utils.log(data.file);
+			await Bun.sleep(2);
+		});
+		downloadFilesStream.on('error', async function(data) {
+			utils.log('test');
+			utils.updateAction(logID, 1);
+			r({'error': 2});
+		});
+		downloadFilesStream.on('end', async function(data) {
+			utils.log('test1');
+			utils.updateAction(logID, 1);
+			setTimeout(() => {
+				fs.unlink(resolve("./files/" + timestamp + "_temp.7z"), err => { if(err) utils.log(err, 2); });
+			}, 300000);
+			r(Bun.file(resolve("./files/" + timestamp + "_temp.7z")));
+		});
+	});
+});
+	
 app.listen(process.env.PORT, async () => { utils.log(`Running on port ${app.server?.port}. Happy GDPS'ing!`) });

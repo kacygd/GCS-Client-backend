@@ -156,6 +156,28 @@ const utils = {
 		var lastUpdateTimestamp = query.get();
 		query.finalize();
 		return lastUpdateTimestamp;
+	},
+	updateAction: async (logID, value1) => {
+		try {
+			const query = db.prepare("UPDATE logs SET value1 = :value1 WHERE logID = :logID", {
+				':value1': value1, ':logID': logID
+			});
+			await query.run();
+			query.finalize();
+			return true;
+		} catch(e) {
+			utils.log(e, 2);
+			return false;
+		}
+	},
+	checkFilesCreating: async (IP) => {
+		var timestamp = await utils.timestamp() - 600;
+		const query = db.prepare("SELECT * FROM logs WHERE type = 2 AND value1 = 0 AND IP = :IP AND timestamp > :timestamp", {
+			':IP': IP, ':timestamp': timestamp
+		});
+		var logs = query.all();
+		query.finalize();
+		return logs.length > 0;
 	}
 };
 
