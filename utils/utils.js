@@ -42,8 +42,17 @@ const utils = {
 		query.finalize();
 		return updateID;
 	},
+	newLauncherUpdate: async (timestamp = null) => {
+		if(timestamp == null) timestamp = await utils.timestamp();
+		const query = db.prepare("INSERT INTO updates (updateType, timestamp) VALUES (1, :timestamp)", {
+			':timestamp': timestamp
+		});
+		const updateID = query.run().lastInsertRowid;
+		query.finalize();
+		return updateID;
+	},
 	getUpdates: async (lastUpdateTimestamp, order = "DESC") => {
-		const query = db.prepare("SELECT * FROM updates WHERE timestamp > :timestamp AND state = 3 ORDER BY timestamp " + order, {
+		const query = db.prepare("SELECT * FROM updates WHERE timestamp > :timestamp AND updateType = 0 AND state = 3 ORDER BY timestamp " + order, {
 			':timestamp': lastUpdateTimestamp
 		});
 		var updates = query.all();
@@ -84,18 +93,64 @@ const utils = {
 			});
 			makeArchive.on('end', async function() {
 				if(timestamp) {
-					const makePatchesArchive = Seven.add(resolve("./patches/" + timestamp +  "/patches.7z"), resolve("./patches/" + timestamp +  "/*.*"), {
-						recursive: true,
-						$bin: pathTo7zip,
-						$cherryPick: '!patches.7z'
-					});
-					makePatchesArchive.on('data', async function(data) {
-						utils.log("Added to patches archive: " + data.file);
-						Bun.gc(true);
-					});
-					makePatchesArchive.on('end', async function(data) {
-						r(true);
-					});
+					try {
+						const makePatchesArchive = Seven.add(resolve("./patches/" + timestamp +  "/patches.7z"), resolve("./patches/" + timestamp +  "/*.*"), {
+							recursive: true,
+							$bin: pathTo7zip,
+							$cherryPick: '!patches.7z'
+						});
+						makePatchesArchive.on('data', async function(data) {
+							utils.log("Added to patches archive: " + data.file);
+							Bun.gc(true);
+						});
+						makePatchesArchive.on('error', async function(data) {
+							r(false);
+						});
+						makePatchesArchive.on('end', async function(data) {
+							r(true);
+						});
+					} catch(e) {
+						r(false);
+					}
+				} else {
+					r(true);
+				}
+			});
+		});
+	},
+	createLauncherLatestVersionArchive: async (timestamp = false) => {
+		return new Promise(async function(r) {
+			await unlink(resolve("./files/launcher.7z"), err => { if(err) utils.log(err, 2); });
+			const pathTo7zip = await utils.pathTo7zip();
+			const makeArchive = Seven.add(resolve("./files/launcher.7z"), resolve("./files/launcher/*.*"), {
+				recursive: true,
+				$bin: pathTo7zip
+			});
+			makeArchive.on('data', async function(data) {
+				utils.log("Added to archive: " + data.file);
+				Bun.gc(true);
+			});
+			makeArchive.on('end', async function() {
+				if(timestamp) {
+					try {
+						const makePatchesArchive = Seven.add(resolve("./patches/" + timestamp +  "/patches.7z"), resolve("./patches/" + timestamp +  "/*.*"), {
+							recursive: true,
+							$bin: pathTo7zip,
+							$cherryPick: '!patches.7z'
+						});
+						makePatchesArchive.on('data', async function(data) {
+							utils.log("Added to patches archive: " + data.file);
+							Bun.gc(true);
+						});
+						makePatchesArchive.on('error', async function(data) {
+							r(false);
+						});
+						makePatchesArchive.on('end', async function(data) {
+							r(true);
+						});
+					} catch(e) {
+						r(false);
+					}
 				} else {
 					r(true);
 				}
@@ -144,7 +199,7 @@ const utils = {
 		return logs.length;
 	},
 	getPatchUpdates: async (lastUpdateTimestamp) => {
-		const query = db.prepare("SELECT * FROM updates WHERE timestamp > :timestamp AND state = 3 AND hasPatches = 1 ORDER BY timestamp ASC", {
+		const query = db.prepare("SELECT * FROM updates WHERE timestamp > :timestamp AND updateType = 0 AND state = 3 AND hasPatches = 1 ORDER BY timestamp ASC", {
 			':timestamp': lastUpdateTimestamp
 		});
 		var updates = query.all();
@@ -152,10 +207,18 @@ const utils = {
 		return updates;
 	},
 	getLastUpdateTimestamp: async () => {
-		const query = db.prepare("SELECT timestamp FROM updates WHERE state = 3 ORDER BY timestamp DESC LIMIT 1");
+		const query = db.prepare("SELECT timestamp FROM updates WHERE state = 3 AND updateType = 0 ORDER BY timestamp DESC LIMIT 1");
 		var lastUpdateTimestamp = query.get();
 		query.finalize();
 		return lastUpdateTimestamp;
+	},
+	getLauncherPatchUpdates: async (lastUpdateTimestamp) => {
+		const query = db.prepare("SELECT * FROM updates WHERE timestamp > :timestamp AND updateType = 1 AND state = 3 AND hasPatches = 1 ORDER BY timestamp ASC", {
+			':timestamp': lastUpdateTimestamp
+		});
+		var updates = query.all();
+		query.finalize();
+		return updates;
 	},
 	updateAction: async (logID, value1) => {
 		try {
@@ -171,7 +234,7 @@ const utils = {
 		}
 	},
 	checkFilesCreating: async (IP) => {
-		var timestamp = await utils.timestamp() - 600;
+		var timestamp = await utils.timestamp() - 300;
 		const query = db.prepare("SELECT * FROM logs WHERE type = 2 AND value1 = 0 AND IP = :IP AND timestamp > :timestamp", {
 			':IP': IP, ':timestamp': timestamp
 		});
