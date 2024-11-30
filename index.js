@@ -7,7 +7,7 @@ import fs from 'fs';
 import * as md5File from 'md5-file';
 import { cors } from '@elysiajs/cors';
 
-const app = new Elysia({ serve: { maxRequestBodySize: 1024 * 1024 * 300 } });
+const app = new Elysia({ serve: { maxRequestBodySize: 1024 * 1024 * 500 } });
 app.use(cors());
 
 app.get('/', async function({ server, request, cookie: { token } }) {
@@ -313,13 +313,13 @@ app.post("/files", async function({ server, request, body }) {
 		const files = body.files;
 		if(files.length == 0) r({'error': 0});
 		const IP = server.requestIP(request).address;
-		const filesCheck = utils.checkFilesCreating(IP);
-		if(filesCheck) r({'error': 1});
+		//const filesCheck = utils.checkFilesCreating(IP);
+		//if(filesCheck) r({'error': 1});
 		const timestamp = await utils.timestamp();
 		const pathTo7zip = await utils.pathTo7zip();
 		const filesPath = [];
 		var i = 0;
-		for(i = 0; i < files.length; i++) filesPath.push(await resolve("./files/last/" + files[i]));
+		for(i = 0; i < files.length; i++) filesPath.push(await resolve("./files/last/" + files[i].replaceAll("\\", "/")));
 		const logID = await utils.logAction(2, 0, files.length, IP);
 		const downloadFilesStream = Seven.add(await resolve("./files/" + timestamp + "_temp.7z"), filesPath, {
 			$bin: pathTo7zip
@@ -329,8 +329,12 @@ app.post("/files", async function({ server, request, body }) {
 			await Bun.sleep(2);
 		});
 		downloadFilesStream.on('error', async function(data) {
+			utils.log(data, 2);
 			utils.updateAction(logID, 1);
-			r({'error': 2});
+			setTimeout(() => {
+				fs.unlink(resolve("./files/" + timestamp + "_temp.7z"), err => { if(err) utils.log(err, 2); });
+			}, 300000);
+			r(Bun.file(resolve("./files/" + timestamp + "_temp.7z")));
 		});
 		downloadFilesStream.on('end', async function(data) {
 			utils.updateAction(logID, 1);
