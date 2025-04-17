@@ -1,7 +1,9 @@
-const { resolve } = require("path");
-const util = require('util');
+import { resolve } from "path";
+import { mkdir } from 'node:fs/promises';
+import util from 'util';
 const exec = util.promisify(require('child_process').execFile);
 const hdiffpatch = [];
+
 /*
 	hdiffpatch.path()
 	Get platform-specific hdiffpatch path
@@ -18,6 +20,7 @@ hdiffpatch.path = function() {
 		hpatchz: resolve(import.meta.dir + "/../lib/hdiffpatch/" + platforms[process.platform] + architectures[process.arch] + "/hpatchz" + (process.platform == 'win32' ? ".exe" : ""))
 	};
 }
+
 /*
 	hdiffpatch.diff(originalFile, targetFile, patchFile)
 	Generate patch file out of old and new files
@@ -29,12 +32,13 @@ hdiffpatch.path = function() {
 	Return: stdout of hdiffz
 */
 hdiffpatch.diff = function(originalFile, targetFile, patchFile) {
-	return new Promise(async function(r) {
+	return new Promise(async function(r, e) {
+		await mkdir(resolve(patchFile, '../'), {recursive: true});
+		
 		const hdiff = hdiffpatch.path()['hdiffz'];
 		const args = [originalFile, targetFile, patchFile];
-		exec(hdiff, args).then(result => {
-			r(result);
-		});
+		
+		exec(hdiff, args).then(result => r(result)).catch(error => e(error));
 	});
 }
 /*

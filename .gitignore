@@ -180,3 +180,4 @@ data/database.db-wal
 
 /files
 /patches
+bun.lock

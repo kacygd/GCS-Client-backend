@@ -1,13 +1,60 @@
+<head>
+	<title>Launcher updates backend</title>
+	<link href="style.css" rel="stylesheet">
+</head>
 <body>
-	<form method="post" action="/create" enctype="multipart/form-data">
-		<p>Upload new GDPS update</p>
-		<input type="file" name="file">
-		<button type="submit">Confirm</button>
-	</form>
-	<hr>
-	<form method="post" action="/create-launcher" enctype="multipart/form-data">
-		<p>Upload new launcher update</p>
-		<input type="file" name="file">
-		<button type="submit">Confirm</button>
-	</form>
+	<h1>Launcher updates backend</h1>
+	<div class="upload-forms">
+		<div class="settings-buttons">
+			<button onclick="changeForm(1)" id="button-1" type="button" class="active">PC GDPS<span></span></button>
+			<button onclick="changeForm(2)" id="button-2" type="button">PC Launcher<span></span></button>
+			<button onclick="changeForm(3)" id="button-3" type="button">Android GDPS<span></span></button>
+			<button onclick="changeForm(4)"id="button-4" type="button">Android Geode<span></span></button>
+			<button onclick="changeForm(5)"id="button-5" type="button">Android Launcher<span></span></button>
+		</div>
+
+		<form method="post" action="/create/pc" enctype="multipart/form-data" id="form-1">
+			<p>Upload new PC GDPS update</p>
+			<input type="file" name="file" required>
+			<button class="submit-button" type="submit">Confirm</button>
+		</form>
+
+		<form method="post" action="/create/pc-launcher" enctype="multipart/form-data" id="form-2" style="display: none;">
+			<p>Upload new PC launcher update</p>
+			<input type="file" name="file" required>
+			<input type="text" name="version" placeholder="New launcher's version" required>
+			<button class="submit-button" type="submit">Confirm</button>
+		</form>
+
+		<form method="post" action="/create/android" enctype="multipart/form-data" id="form-3" style="display: none;">
+			<p>Upload new Android GDPS update</p>
+			<input type="file" name="file" required>
+			<button class="submit-button" type="submit">Confirm</button>
+		</form>
+
+		<form method="post" action="/create/android-geode" enctype="multipart/form-data" id="form-4" style="display: none;">
+			<p>Upload new Android Geode update</p>
+			<input type="file" name="file" required>
+			<button class="submit-button" type="submit">Confirm</button>
+		</form>
+
+		<form method="post" action="/create/android-launcher" enctype="multipart/form-data" id="form-5" style="display: none;">
+			<p>Upload new Android Launcher update</p>
+			<input type="file" name="file" required>
+			<input type="text" name="version" placeholder="New launcher's version" required>
+			<button class="submit-button" type="submit">Confirm</button>
+		</form>
+
+	</div>
 </body>
+<script>
+	var currentForm = 1;
+	
+	function changeForm(id) {
+		document.getElementById("button-" + currentForm).classList.remove("active");
+		document.getElementById("form-" + currentForm).style.display = "none";
+		document.getElementById("button-" + id).classList.add("active");
+		document.getElementById("form-" + id).style.display = "flex";
+		currentForm = id;
+	}
+</script>
