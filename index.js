@@ -1,5 +1,5 @@
 import { utils } from "./utils/utils.js";
-import { rename, mkdir, rm, readFile, writeFile, stat, existsSync } from 'node:fs/promises';
+import { rename, mkdir, rm, readFile, writeFile, stat } from 'node:fs/promises'; // Bỏ existsSync
 import { resolve } from "path";
 import { Elysia } from 'elysia';
 import { cors } from '@elysiajs/cors';
@@ -14,7 +14,14 @@ app.get("/", async ({ server, request, cookie: { token } }) => {
         if (!validatePerson) {
             console.log("Validation failed, serving setToken.html");
             const setTokenPath = resolve("./pages/setToken.html");
-            if (!existsSync(setTokenPath)) {
+            let setTokenExists = false;
+            try {
+                await stat(setTokenPath);
+                setTokenExists = true;
+            } catch {
+                setTokenExists = false;
+            }
+            if (!setTokenExists) {
                 console.error("setToken.html not found");
                 return new Response("setToken.html not found", { status: 500 });
             }
@@ -23,7 +30,14 @@ app.get("/", async ({ server, request, cookie: { token } }) => {
 
         console.log("Validation passed, serving index.html");
         const indexPath = resolve("./pages/index.html");
-        if (!existsSync(indexPath)) {
+        let indexExists = false;
+        try {
+            await stat(indexPath);
+            indexExists = true;
+        } catch {
+            indexExists = false;
+        }
+        if (!indexExists) {
             console.error("index.html not found");
             return new Response("index.html not found", { status: 500 });
         }
@@ -41,7 +55,14 @@ app.post("/create/:updateType", async ({ server, request, params: { updateType }
         if (!validatePerson) {
             console.log("Validation failed, serving setToken.html");
             const setTokenPath = resolve("./pages/setToken.html");
-            if (!existsSync(setTokenPath)) {
+            let setTokenExists = false;
+            try {
+                await stat(setTokenPath);
+                setTokenExists = true;
+            } catch {
+                setTokenExists = false;
+            }
+            if (!setTokenExists) {
                 console.error("setToken.html not found");
                 return new Response("setToken.html not found", { status: 500 });
             }
@@ -95,7 +116,14 @@ app.get("/download/:updateType/:lastTimestamp", async ({ params: { updateType, l
             ? resolve(`./files/${updateType}/archive.zip`)
             : resolve(`./patches/${updateType}/${lastTimestamp}/patches.zip`);
 
-        if (!existsSync(filePath)) {
+        let fileExists = false;
+        try {
+            await stat(filePath);
+            fileExists = true;
+        } catch {
+            fileExists = false;
+        }
+        if (!fileExists) {
             console.error(`File not found: ${filePath}`);
             return new Response("File not found", { status: 404 });
         }
@@ -117,7 +145,14 @@ app.route('OPTIONS', '/download/:updateType/:lastTimestamp', async ({ params: { 
             ? resolve(`./files/${updateType}/archive.zip`)
             : resolve(`./patches/${updateType}/${lastTimestamp}/patches.zip`);
 
-        if (!existsSync(filePath)) {
+        let fileExists = false;
+        try {
+            await stat(filePath);
+            fileExists = true;
+        } catch {
+            fileExists = false;
+        }
+        if (!fileExists) {
             console.error(`File not found: ${filePath}`);
             return new Response("File not found", { status: 404 });
         }
@@ -136,7 +171,14 @@ app.get("/version/:updateType", async ({ params: { updateType } }) => {
         const updateFileType = await utils.getUpdateFileType(updateType);
         if (updateFileType.endsWith('version')) {
             const filePath = resolve(`./${updateType}-version`);
-            if (!existsSync(filePath)) {
+            let fileExists = false;
+            try {
+                await stat(filePath);
+                fileExists = true;
+            } catch {
+                fileExists = false;
+            }
+            if (!fileExists) {
                 console.error(`File not found: ${filePath}`);
                 return new Response("File not found", { status: 404 });
             }
@@ -178,7 +220,14 @@ app.get("/launcher", async () => {
     try {
         console.log("Processing GET /launcher request...");
         const filePath = resolve(`./pc-launcher-version`);
-        if (!existsSync(filePath)) {
+        let fileExists = false;
+        try {
+            await stat(filePath);
+            fileExists = true;
+        } catch {
+            fileExists = false;
+        }
+        if (!fileExists) {
             console.error(`File not found: ${filePath}`);
             return new Response("File not found", { status: 404 });
         }
@@ -193,7 +242,14 @@ app.get("/style.css", async () => {
     try {
         console.log("Processing GET /style.css request...");
         const filePath = resolve('pages/style.css');
-        if (!existsSync(filePath)) {
+        let fileExists = false;
+        try {
+            await stat(filePath);
+            fileExists = true;
+        } catch {
+            fileExists = false;
+        }
+        if (!fileExists) {
             console.error(`File not found: ${filePath}`);
             return new Response("File not found", { status: 404 });
         }
